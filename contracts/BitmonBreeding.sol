@@ -1,7 +1,8 @@
 pragma solidity ^0.5.0;
 
 import "@openzeppelin/contracts/access/roles/MinterRole.sol";
-import "./utils/seriality/Seriality.sol";
+import "../bitmon/contracts/BitmonCore.sol";
+
 
 /**
  * @title BitmonBreeding
@@ -10,15 +11,20 @@ import "./utils/seriality/Seriality.sol";
  */
 
 
-contract BitmonBreeding is MinterRole {
+contract BitmonBreeding is MinterRole, BitmonBase, Seriality {
     string public constant name = "BitmonBreeding";
     string public constant symbol = "BMB";
 
     address public randomContractAddr;
+    BitmonCore private bitmonContract;
 
     function setRandomContractAddr(address _addr) external onlyMinter returns (bool) {
         randomContractAddr = _addr;
         return true;
+    }
+
+    function setBitmonAddr(address _addr) external onlyMinter {
+        bitmonContract = BitmonCore(_addr);
     }
 
     function random() internal returns (uint8) {
@@ -61,14 +67,55 @@ contract BitmonBreeding is MinterRole {
         return variant;
     }
 
+    function ser(Bitmon memory bitmon) private pure returns (uint256) {
+        bytes memory b = new bytes(32);
+        uintToBytes(32, bitmon.bitmonId, b);
+        uintToBytes(28, bitmon.fatherId, b);
+        uintToBytes(24, bitmon.motherId, b);
+        uintToBytes(20, bitmon.birthHeight, b);
+        uintToBytes(16, bitmon.gender, b);
+        uintToBytes(15, bitmon.nature, b);
+        uintToBytes(14, bitmon.specimen, b);
+        uintToBytes(13, bitmon.variant, b);
+        uintToBytes(12, bitmon.purity, b);
+        uintToBytes(11, bitmon.generation, b);
+        uintToBytes(10, bitmon.h, b);
+        uintToBytes(9, bitmon.a, b);
+        uintToBytes(8, bitmon.sa, b);
+        uintToBytes(7, bitmon.d, b);
+        uintToBytes(6, bitmon.sd, b);
+        return 0;
+    }
+
+    function deser(uint256 tokenID) private view returns (Bitmon memory) {
+        bytes memory b = new bytes(32);
+        uint256 serialized = bitmonContract.getSerializedBitmon(tokenID);
+        uintToBytes(32, serialized, b);
+        Bitmon memory _bitmon;
+        _bitmon.bitmonId = bytesToUint32(32, b);
+        _bitmon.fatherId = bytesToUint32(28, b);
+        _bitmon.motherId = bytesToUint32(24, b);
+        _bitmon.birthHeight = bytesToUint32(20, b);
+        _bitmon.gender = bytesToUint8(16, b);
+        _bitmon.nature = bytesToUint8(15, b);
+        _bitmon.specimen = bytesToUint8(14, b);
+        _bitmon.variant = bytesToUint8(13, b);
+        _bitmon.purity = bytesToUint8(12, b);
+        _bitmon.generation = bytesToUint8(11, b);
+        _bitmon.h = bytesToUint8(10, b);
+        _bitmon.a = bytesToUint8(9, b);
+        _bitmon.sa = bytesToUint8(8, b);
+        _bitmon.d = bytesToUint8(7, b);
+        _bitmon.sd = bytesToUint8(6, b);
+        return _bitmon;
+    }
+
     function breedBitmon(address to, uint256 fatherId, uint256 motherId) external returns (uint256) {
-        require(_exists(fatherId), "ERC721: Father doesn't exists");
-        require(_exists(motherId), "ERC721: Mother doesn't exists");
-        Bitmon memory m = _deserializeBitmon(motherId);
-        Bitmon memory f = _deserializeBitmon(fatherId);
+        require(bitmonContract.ownerOf(fatherId) == msg.sender, "ERC721: Father doesn't exists");
+        require(bitmonContract.ownerOf(motherId) == msg.sender, "ERC721: Mother doesn't exists");
+        Bitmon memory m = deser(motherId);
+        Bitmon memory f = deser(fatherId);
         require(f.specimen == m.specimen, "ERC721: Mother doesn't exists");
-        uint256 tokenId = totalSupply() + 1;
-        _safeMint(to, tokenId, "");
 
         uint32 bitmonId = m.bitmonId;
         if (random() < 128) {
@@ -98,7 +145,7 @@ contract BitmonBreeding is MinterRole {
             sd: calcTrait(purity, f.sd, m.sd, 640, 0, 100)
         });
 
-        bitmons[tokenId] = _serializeBitmon(child);
+        uint256 tokenId = bitmonContract.createChildBitmon(ser(child), msg.sender);
 
         return tokenId;
     }
