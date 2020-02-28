@@ -1,0 +1,3 @@
+[submodule "bitmon"]
+	path = bitmon
+	url = git@github.com:meyer9/bitmon
